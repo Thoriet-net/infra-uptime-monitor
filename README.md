@@ -4,7 +4,7 @@ A small SRE-flavoured uptime monitor for **URLs and IP-based targets**.
 Built to be **boring, predictable and reproducible**.
 
 > Current state: API + DB + background worker  
-> Features: HTTP/TCP checks, retention, Docker Compose
+> Features: HTTP/TCP checks, retention, Docker Compose, Kubernetes (kind)
 
 ---
 
@@ -21,6 +21,7 @@ Built to be **boring, predictable and reproducible**.
 - Background worker performing periodic checks
 - Stores check results (status, latency, errors)
 - Retention policy for old check data
+- Runs locally via Docker Compose or in Kubernetes (kind)
 
 ---
 
@@ -33,6 +34,12 @@ flowchart LR
   Worker[Background Worker] --> DB
 
   subgraph Docker Compose
+    API
+    Worker
+    DB
+  end
+
+  subgraph Kubernetes (kind)
     API
     Worker
     DB
@@ -69,6 +76,46 @@ docker compose up -d
 docker compose logs -f
 docker compose down
 ```
+
+---
+
+## Quickstart (Kubernetes / kind)
+
+### Requirements
+- Docker Desktop
+- kubectl
+- kind
+
+### Create cluster
+```bash
+kind create cluster --name uptime
+```
+
+### Build and load image
+```bash
+docker build -t infra-uptime-monitor:local .
+kind load docker-image infra-uptime-monitor:local --name uptime
+```
+
+### Deploy to Kubernetes
+```bash
+kubectl apply -f k8s/
+```
+
+### Access API
+> Docker Compose uses port 8000. Kubernetes is exposed via port-forward on 18000 to avoid conflicts.
+
+```bash
+kubectl -n uptime port-forward svc/api 18000:8000
+```
+
+```bash
+curl http://localhost:18000/healthz
+curl http://localhost:18000/targets
+```
+
+### Database initialization
+Database schema is initialized via a one-shot Kubernetes Job running Alembic migrations.
 
 ---
 
@@ -114,11 +161,9 @@ curl http://localhost:8000/targets
 
 Database schema is managed via **Alembic**.
 
-Migrations are executed automatically when the API container starts:
-
-```bash
-alembic upgrade head && uvicorn ...
-```
+Migrations are executed automatically:
+- on API startup in Docker Compose
+- via a dedicated Kubernetes Job in Kubernetes
 
 Manual commands (inside running container):
 
@@ -151,7 +196,7 @@ This project focuses on:
 - Data retention policy (done)
 - Uptime history & simple status view
 - Alerting (webhook / email)
-- Kubernetes deployment (k3s-friendly)
+- Kubernetes deployment (kind, production-oriented patterns) (done)
 - Optional Terraform cloud deployment
 
 ---
