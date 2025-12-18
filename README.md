@@ -3,8 +3,8 @@
 A small SRE-flavoured uptime monitor for **URLs and IP-based targets**.  
 Built to be **boring, predictable and reproducible**.
 
-> Current state: API + DB + migrations  
-> Next milestone: background worker performing checks
+> Current state: API + DB + background worker  
+> Features: HTTP/TCP checks, retention, Docker Compose
 
 ---
 
@@ -18,6 +18,9 @@ Built to be **boring, predictable and reproducible**.
 - Exposes a simple REST API
 - Uses **Alembic migrations** for database schema management
 - Runs fully locally via **Docker Compose**
+- Background worker performing periodic checks
+- Stores check results (status, latency, errors)
+- Retention policy for old check data
 
 ---
 
@@ -27,9 +30,11 @@ Built to be **boring, predictable and reproducible**.
 flowchart LR
   Client[User / curl / browser] --> API[FastAPI API]
   API --> DB[(PostgreSQL)]
+  Worker[Background Worker] --> DB
 
   subgraph Docker Compose
     API
+    Worker
     DB
   end
 ```
@@ -74,6 +79,10 @@ Create a `.env` file (not committed, see `.env.example`):
 ```env
 APP_ENV=dev
 DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/uptime
+WORKER_INTERVAL_SECONDS=30
+WORKER_HTTP_TIMEOUT_SECONDS=5
+WORKER_TCP_TIMEOUT_SECONDS=3
+CHECK_RETENTION_DAYS=7
 ```
 
 ---
@@ -136,8 +145,10 @@ This project focuses on:
 
 ## Roadmap
 
-- Background worker performing checks
-- Store check results (status, latency, timestamp)
+- Background worker performing checks (done)
+- HTTP and TCP monitoring (done)
+- Store check results (status, latency, timestamp) (done)
+- Data retention policy (done)
 - Uptime history & simple status view
 - Alerting (webhook / email)
 - Kubernetes deployment (k3s-friendly)
