@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import String, Integer, Boolean, DateTime, Float, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
@@ -24,7 +24,7 @@ class Check(Base):
     latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     error: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     target = relationship("Target")
 

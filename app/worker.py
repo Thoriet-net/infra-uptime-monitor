@@ -1,10 +1,10 @@
 import os
 import time
 import socket
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from app.db import SessionLocal
 from app.models import Target, Check
@@ -12,7 +12,7 @@ from app.models import Target, Check
 INTERVAL_SECONDS = int(os.getenv("WORKER_INTERVAL_SECONDS", "30"))
 HTTP_TIMEOUT_SECONDS = float(os.getenv("WORKER_HTTP_TIMEOUT_SECONDS", "5"))
 TCP_TIMEOUT_SECONDS = float(os.getenv("WORKER_TCP_TIMEOUT_SECONDS", "3"))
-
+RETENTION_DAYS = int(os.getenv("CHECK_RETENTION_DAYS", "7"))
 
 def check_http(url: str):
     start = time.perf_counter()
@@ -63,13 +63,16 @@ def run_once():
                 status_code=status_code,
                 latency_ms=latency_ms,
                 error=error,
-                checked_at=datetime.utcnow(),
+                checked_at=datetime.now(timezone.utc),
             )
             print(
                 f"[worker] target_id={t.id} name={t.name} type={t.type} ok={ok} "
                 f"status={status_code} latency_ms={latency_ms:.1f} error={error}"
             )
             db.add(c)
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+        db.execute(delete(Check).where(Check.checked_at < cutoff))
 
         db.commit()
     finally:
