@@ -1,5 +1,6 @@
-from sqlalchemy import String, Integer, Boolean
-from sqlalchemy.orm import Mapped, mapped_column
+from datetime import datetime
+from sqlalchemy import String, Integer, Boolean, DateTime, Float, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 class Target(Base):
@@ -11,3 +12,19 @@ class Target(Base):
     target: Mapped[str] = mapped_column(String(512), nullable=False)  # url or host/ip
     port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+class Check(Base):
+    __tablename__ = "checks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey("targets.id"), nullable=False, index=True)
+
+    ok: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    error: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    target = relationship("Target")
+
