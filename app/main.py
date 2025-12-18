@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from app.db import get_db
-from app.models import Target
+from app.models import Target, Check
 
 app = FastAPI(title="Infra Uptime Monitor", version="0.1.0")
 
@@ -38,4 +38,26 @@ def list_targets(db: Session = Depends(get_db)):
     return [
         {"id": t.id, "name": t.name, "type": t.type, "target": t.target, "port": t.port, "enabled": t.enabled}
         for t in rows
+    ]
+
+@app.get("/targets/{target_id}/checks")
+def list_checks(target_id: int, db: Session = Depends(get_db), limit: int = 20):
+    rows = db.execute(
+        select(Check)
+        .where(Check.target_id == target_id)
+        .order_by(Check.checked_at.desc())
+        .limit(limit)
+    ).scalars().all()
+
+    return [
+        {
+            "id": c.id,
+            "target_id": c.target_id,
+            "ok": c.ok,
+            "status_code": c.status_code,
+            "latency_ms": c.latency_ms,
+            "error": c.error,
+            "checked_at": c.checked_at.isoformat(),
+        }
+        for c in rows
     ]
