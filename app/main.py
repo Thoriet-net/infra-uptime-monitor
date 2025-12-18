@@ -3,17 +3,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from app.db import get_db, engine, Base
+from app.db import get_db
 from app.models import Target
-from app import models  # noqa: F401 (ensures models are imported)
 
 app = FastAPI(title="Infra Uptime Monitor", version="0.1.0")
-
-@app.on_event("startup")
-def on_startup():
-    # Temporary approach: create tables automatically.
-    # We'll replace this with Alembic migrations in the next milestone.
-    Base.metadata.create_all(bind=engine)
 
 @app.get("/healthz")
 def healthz():
