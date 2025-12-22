@@ -1,13 +1,22 @@
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
+from pathlib import Path
 
 from app.db import get_db
 from app.models import Target, Check
 
 app = FastAPI(title="Infra Uptime Monitor", version="0.1.0")
+
+app.mount("/ui", StaticFiles(directory="app/static", html=True), name="ui")
+
+@app.get("/")
+def root():
+    return RedirectResponse(url="/ui")
 
 
 def get_target_or_404(db: Session, target_id: int) -> Target:
@@ -116,3 +125,17 @@ def uptime(
         "ok_checks": ok,
         "uptime_percent": uptime,
     }
+
+@app.delete("/targets/{target_id}")
+def delete_target(target_id: int, db: Session = Depends(get_db)):
+    # check existence
+    t = db.get(Target, target_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Target not found")
+
+    # delete checks first (avoid FK issues)
+    db.execute(delete(Check).where(Check.target_id == target_id))
+    db.execute(delete(Target).where(Target.id == target_id))
+    db.commit()
+
+    return {"ok": True, "deleted_target_id": target_id}
