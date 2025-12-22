@@ -25,10 +25,10 @@ Each component has a clearly defined responsibility and failure boundary.
 
 ```mermaid
 flowchart LR
-    User[User / Operator]
-    API[API (FastAPI)<br/>REST + Web UI]
-    Worker[Worker<br/>Background checks]
-    DB[(PostgreSQL)]
+    User["User / Operator"]
+    API["API (FastAPI)<br/>REST + Web UI"]
+    Worker["Worker<br/>Background checks"]
+    DB[("PostgreSQL")]
 
     User -->|HTTP| API
     API -->|Read/Write| DB
