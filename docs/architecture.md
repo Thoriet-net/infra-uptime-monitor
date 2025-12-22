@@ -25,10 +25,15 @@ Each component has a clearly defined responsibility and failure boundary.
 
 ```mermaid
 flowchart LR
-  U[User / Browser] -->|HTTP| API[API (FastAPI)\nREST + Web UI]
-  API -->|SQL| DB[(PostgreSQL)]
-  W[Worker\nHTTP/TCP/ICMP checks] -->|SQL (write checks)| DB
-  API <-->|SQL (read results)| DB
+    User[User / Operator]
+    API[API (FastAPI)<br/>REST + Web UI]
+    Worker[Worker<br/>Background checks]
+    DB[(PostgreSQL)]
+
+    User -->|HTTP| API
+    API -->|Read/Write| DB
+    Worker -->|Read targets| DB
+    Worker -->|Write checks| DB
 ```
 
 ### System view (ASCII fallback)
