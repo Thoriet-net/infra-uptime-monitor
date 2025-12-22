@@ -1,206 +1,118 @@
 # Infra Uptime Monitor
 
-A small SRE-flavoured uptime monitor for **URLs and IP-based targets**.  
-Built to be **boring, predictable and reproducible**.
+Simple uptime monitoring service for HTTP, TCP and ICMP targets.
 
-> Current state: API + DB + background worker  
-> Features: HTTP/TCP checks, retention, Docker Compose, Kubernetes (kind)
+This project was built primarily to explore and compare different deployment strategies:
+- local development using Docker Compose
+- container orchestration using Kubernetes
 
----
-
-## What it does
-
-- Stores monitoring targets in PostgreSQL
-- Supports target types:
-  - `http` (URL availability)
-  - `tcp` (port availability)
-  - `icmp` (ping – planned)
-- Exposes a simple REST API
-- Uses **Alembic migrations** for database schema management
-- Runs fully locally via **Docker Compose**
-- Background worker performing periodic checks
-- Stores check results (status, latency, errors)
-- Retention policy for old check data
-- Runs locally via Docker Compose or in Kubernetes (kind)
+The application logic is intentionally simple. The main focus is infrastructure, deployment flow and operational behavior.
 
 ---
 
-## Architecture
+## Features
 
-```mermaid
-flowchart LR
-  Client[User / curl / browser] --> API[FastAPI API]
-  API --> DB[(PostgreSQL)]
-  Worker[Background Worker] --> DB
-
-  subgraph Docker Compose
-    API
-    Worker
-    DB
-  end
-
-  subgraph Kubernetes (kind)
-    API
-    Worker
-    DB
-  end
-```
+- Monitor HTTP, TCP and ICMP targets
+- Background worker for executing checks
+- REST API built with FastAPI
+- Simple Web UI for managing targets
+- Uptime statistics and history
+- PostgreSQL database
+- Database migrations via Alembic
 
 ---
 
-## Quickstart (local)
+## Architecture Overview
 
-### Requirements
-- Docker Desktop
+The application is split into multiple components:
 
-### Run
+### API
+- Handles HTTP requests
+- Manages targets and exposes monitoring data
+- Stateless and lightweight
+- Designed to respond quickly
+
+### Worker
+- Runs independently from the API
+- Periodically executes uptime checks
+- Supports HTTP, TCP and ICMP probes
+- Can be scaled separately from the API
+
+### Database
+- PostgreSQL
+- Stores targets and check history
+- Shared by API and worker
+
+---
+
+## Quick Start (Docker Compose)
+
+Run the full stack locally using Docker Compose.
+
+### Start services (foreground)
 
 ```bash
 docker compose up --build
 ```
 
-API endpoints:
-- Health check: http://localhost:8000/healthz
-- Swagger UI: http://localhost:8000/docs
-
-Stop:
+### Start services in background
 
 ```bash
-Ctrl + C
+docker compose up -d --build
 ```
 
-Run in background:
+### Stop and remove services
 
 ```bash
-docker compose up -d
-docker compose logs -f
 docker compose down
 ```
 
----
+### Available endpoints
 
-## Quickstart (Kubernetes / kind)
-
-### Requirements
-- Docker Desktop
-- kubectl
-- kind
-
-### Create cluster
-```bash
-kind create cluster --name uptime
-```
-
-### Build and load image
-```bash
-docker build -t infra-uptime-monitor:local .
-kind load docker-image infra-uptime-monitor:local --name uptime
-```
-
-### Deploy to Kubernetes
-```bash
-kubectl apply -f k8s/
-```
-
-### Access API
-> Docker Compose uses port 8000. Kubernetes is exposed via port-forward on 18000 to avoid conflicts.
-
-```bash
-kubectl -n uptime port-forward svc/api 18000:8000
-```
-
-```bash
-curl http://localhost:18000/healthz
-curl http://localhost:18000/targets
-```
-
-### Database initialization
-Database schema is initialized via a one-shot Kubernetes Job running Alembic migrations.
+- API: http://localhost:8000
+- Web UI: http://localhost:8000/ui
+- Swagger UI: http://localhost:8000/docs
 
 ---
 
-## Configuration
+## Kubernetes Deployment
 
-Create a `.env` file (not committed, see `.env.example`):
+The same application can be deployed to Kubernetes (tested with `kind`).
 
-```env
-APP_ENV=dev
-DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/uptime
-WORKER_INTERVAL_SECONDS=30
-WORKER_HTTP_TIMEOUT_SECONDS=5
-WORKER_TCP_TIMEOUT_SECONDS=3
-CHECK_RETENTION_DAYS=7
-```
+Kubernetes deployment demonstrates:
+- separation of API and worker workloads
+- self-healing via pod restarts
+- database migrations via a Kubernetes Job
+
+Detailed instructions are available in `docs/kubernetes.md`.
 
 ---
 
-## API usage
+## Documentation
 
-### Create monitoring target
+Additional documentation is split into smaller focused files:
 
-```bash
-curl -X POST http://localhost:8000/targets \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Google",
-    "type": "http",
-    "target": "https://google.com",
-    "enabled": true
-  }'
-```
-
-### List targets
-
-```bash
-curl http://localhost:8000/targets
-```
+- `docs/architecture.md`
+- `docs/api.md`
+- `docs/docker-compose.md`
+- `docs/kubernetes.md`
+- `docs/terraform.md` (planned)
+- `docs/roadmap.md`
 
 ---
 
-## Database migrations
+## Project Motivation
 
-Database schema is managed via **Alembic**.
+The goal of this project was not feature complexity, but hands-on experience with:
 
-Migrations are executed automatically:
-- on API startup in Docker Compose
-- via a dedicated Kubernetes Job in Kubernetes
-
-Manual commands (inside running container):
-
-```bash
-docker compose exec api alembic current
-docker compose exec api alembic history
-docker compose exec api alembic upgrade head
-```
-
----
-
-## Why this project
-
-I’m transitioning from a networking-heavy background towards  
-**SRE / platform engineering**.
-
-This project focuses on:
-- availability & monitoring mindset
-- reproducible environments
-- explicit database schema management
-- clean separation between API and future worker logic
-
----
-
-## Roadmap
-
-- Background worker performing checks (done)
-- HTTP and TCP monitoring (done)
-- Store check results (status, latency, timestamp) (done)
-- Data retention policy (done)
-- Uptime history & simple status view
-- Alerting (webhook / email)
-- Kubernetes deployment (kind, production-oriented patterns) (done)
-- Optional Terraform cloud deployment
+- real-world deployment patterns
+- separation of API and background processing
+- Docker Compose vs Kubernetes behavior
+- preparing a clean base for future cloud deployment
 
 ---
 
 ## License
 
 MIT
+```
