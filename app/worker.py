@@ -1,6 +1,8 @@
 import os
 import time
 import socket
+import re
+import subprocess
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -12,6 +14,7 @@ from app.models import Target, Check
 INTERVAL_SECONDS = int(os.getenv("WORKER_INTERVAL_SECONDS", "30"))
 HTTP_TIMEOUT_SECONDS = float(os.getenv("WORKER_HTTP_TIMEOUT_SECONDS", "5"))
 TCP_TIMEOUT_SECONDS = float(os.getenv("WORKER_TCP_TIMEOUT_SECONDS", "3"))
+ICMP_TIMEOUT_SECONDS = float(os.getenv("WORKER_ICMP_TIMEOUT_SECONDS", "3"))
 RETENTION_DAYS = int(os.getenv("CHECK_RETENTION_DAYS", "7"))
 
 def check_http(url: str):
@@ -38,6 +41,56 @@ def check_tcp(host: str, port: int):
         latency_ms = (time.perf_counter() - start) * 1000.0
         return False, None, latency_ms, str(e)
 
+def check_icmp(host: str, ip_version: int = 4):
+    """ICMP check using the system `ping` binary (Linux inside container).
+
+    Notes:
+    - In Docker Compose and Kubernetes, this runs inside a Linux container, so we rely on `iputils-ping`.
+    - We try to parse RTT from stdout ("time=... ms"). If parsing fails, we fall back to wall-clock runtime.
+    """
+    start = time.perf_counter()
+    try:
+        # `-W` is in seconds for iputils ping (Linux). Keep it integer.
+        timeout_s = max(1, int(ICMP_TIMEOUT_SECONDS))
+
+        # Keep a hard subprocess timeout slightly above ping timeout, so the worker never hangs.
+        hard_timeout = float(timeout_s) + 1.0
+
+        cmd = ["ping", "-c", "1", "-W", str(timeout_s), host]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=hard_timeout,
+        )
+
+        wall_ms = (time.perf_counter() - start) * 1000.0
+        ok = result.returncode == 0
+
+        # Prefer RTT from output when available.
+        rtt_ms = None
+        m = re.search(r"time=([0-9.]+)\s*ms", result.stdout)
+        if m:
+            try:
+                rtt_ms = float(m.group(1))
+            except ValueError:
+                rtt_ms = None
+
+        latency_ms = rtt_ms if rtt_ms is not None else wall_ms
+
+        if ok:
+            return True, None, latency_ms, None
+
+        # Keep error short but informative
+        err = (result.stderr or "").strip() or f"ping failed (rc={result.returncode})"
+        return False, None, latency_ms, err
+
+    except subprocess.TimeoutExpired:
+        wall_ms = (time.perf_counter() - start) * 1000.0
+        return False, None, wall_ms, "ping timed out"
+    except Exception as e:
+        wall_ms = (time.perf_counter() - start) * 1000.0
+        return False, None, wall_ms, str(e)  
 
 def run_once():
     db = SessionLocal()
@@ -53,8 +106,9 @@ def run_once():
                 if not t.port:
                     continue
                 ok, status_code, latency_ms, error = check_tcp(t.target, t.port)
+            elif t.type == "icmp":
+                ok, status_code, latency_ms, error = check_icmp(t.target)
             else:
-                # icmp planned later
                 continue
 
             c = Check(

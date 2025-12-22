@@ -28,9 +28,20 @@ spec:
         - name: worker
           image: infra-uptime-monitor:local
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: ["NET_RAW"]
           envFrom:
             - configMapRef:
                 name: uptime-config
           command: ["sh", "-c"]
           args:
             - "python -m app.worker"
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 192Mi
